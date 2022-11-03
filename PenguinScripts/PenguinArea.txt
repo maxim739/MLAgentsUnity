@@ -1,0 +1,135 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using Unity.MLAgents;
+using TMPro;
+
+public class PenguinArea : MonoBehaviour
+{
+    // These variables keep track of important objects in the scene, hooked objects to public variables in editor
+    public PenguinAgent penguinAgent;   // Agent inside the area
+    public GameObject penguinBaby;      // Baby penguin inside the area
+    public TextMeshPro cumulativeRewardText;    //The TextMeshPro that shows the culumative reward of the agent
+    public Fish fishPrefab; // Prefab of a live fish
+
+    private List<GameObject> fishList;
+
+    public void ResetArea() // This function will call other functions created later in script
+    {
+        RemoveAllFish();
+        PlacePenguin();
+        PlaceBaby();
+        SpawnFish(4, .5f);
+    }
+
+    // Remove a specific fish from the area when it is eaten
+    // When the penguin catches a fish, the PenguinAgent script will call RemoveSpecificFish() to remove it from the water
+    public void RemoveSpecificFish(GameObject fishObject)
+    {
+        fishList.Remove(fishObject);
+        Destroy(fishObject);
+    }
+
+    // The number of fish remaining
+    public int FishRemaining
+    {
+        get { return fishList.Count; }
+    }
+
+    // Fish only spawn in water, baby penguin only spawns on land, penguin spawns in either
+    // Choose a random position on the X-Z plane wihin a partial donut shape
+    public static Vector3 ChooseRandomPosition(Vector3 center, float minAngle, float maxAngle, float minRadius, float maxRadius)
+    {
+        // Center is the center of the donut
+        
+        float radius = minRadius;
+        float angle = minAngle;
+
+        if (maxRadius > minRadius)  // Max radius = maximum distance from center, Min radius = minimum distance from center
+        {
+            // Pick a random radius
+            radius = UnityEngine.Random.Range(minRadius, maxRadius);
+        }
+
+        if (maxAngle > minAngle)    // Max angle = maximum angle of the wedge, Min angle = minimum angle of the wedge
+        {
+            angle = UnityEngine.Random.Range(minAngle, maxAngle);
+        }
+
+        // Center position + forward vector rotated around Y axis by "angle" degrees, multiplies by "radius"
+        return center + Quaternoin.Euler(0f, angle, 0f) * Vector3.forward * radius;
+        // Picks position within wedge around central point of area
+    }
+
+    // Add a removeallfish() function
+    // The ResetArea function calls RemoveAllFish() to make sure no fish are in the area before spawning new fish
+    private void RemoveAllFish()    // Remove all fish from the area
+    {
+        if (fishList != null)
+        {
+            for (int i = 0; i < fishList.Count; i++)
+            {
+                if (fishList)
+                {
+                    Destroy(fishList[i]);
+                }
+            }
+        }
+
+        fishList = new List<GameObject>();
+    }
+
+    // Place a pengiun in the area
+    private void PlacePengiun()
+    {
+        Rigidbody rigidbody = pengiunAgent.GetComponent<Rigidbody>();
+        rigidbody.velocity = Vector3.zero;  // Set to zero to cancel errors in velocity in previous trainings, better to reset velocities when area resets
+        rigidbody.angularVelocity = Vector3.zero;
+        penguinAgent.transform.position = ChooseRandomPosition(transform.position, 0f, 360f, 0f, 9f) + Vector3.up * .5f;
+        pengiunAgent.transform.rotation = Quaternion.Euler(0f, UnityEngine.Random.Range(0f, 360f), 0f);
+    }
+
+    // Place a baby pengiun in the area
+    private void PlaceBaby()
+    {
+        Rigidbody rigidbody = pengiunBaby.GetComponent<Rigidbody>();
+        rigidbody.velocity = Vector3.zero;
+        rigidbody.angularVelocity = Vector3.zero;
+        penguinBaby.transform.position = ChooseRandomPosition(transform.position, 0f, 360f, 0f, 9f) + Vector3.up * .5f;
+        pengiunBaby.transform.rotation = Quaternion.Euler(0f, UnityEngine.Random.Range(0f, 180f), 0f);
+    }
+
+    // Spawn the fish and set a swim speed
+    private void SpawnFish(int count, float fishSpeed)  // Place a specified number of fish in area and sets default swim speed
+    {
+        for (int i = 0; i < count; i++)
+        {
+            // Spawn and place the fish
+            GameObject fishObject = Instantiate<GameObject>(fishPrefab.gameObject);
+            fishObject.transform.position = ChooseRandomPosition(transform.position, 100f, 260f, 2f, 13f) + Vector3.up * .5f;
+            fishObject.transform.rotation = Quaternion.Euler(0f, UnityEngine.Random.Range(0f, 360f), 0f);
+
+            // Set the fish's parent to this area's transform
+            fishObject.transform.SetParent(transform);
+
+            // Keep track of the fish
+            fishList.Add(fishObject);
+
+            // Set the fish speed
+            fishObject.GetComponent<Fish>().fishSpeed = fishSpeed;
+        }
+    }
+
+    // Start function that calls ResetArea()
+    private void Start()
+    {
+        ResetArea();    // Calls function
+    }
+
+    // Add new Update() function
+    private void Update()   // Updates the culmulative reward text in the back wall of the area every frame, which isn't necessary, but shows how well the pengiuns are doing
+    {
+        // Update culmulative reward text
+        culmulativeRewardText.text = penguinAgent.GetCulmulativeReward().ToString("0.00");
+    }
+}

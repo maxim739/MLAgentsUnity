@@ -1,0 +1,189 @@
+using UnityEngine;
+using Unity.MLAgents;
+using Unity.MLAgents.Actuators;
+using Unity.MLAgents.Sensors;
+
+public class PenguinAgent : Agent
+{
+    // Public Variables keep track of move and turn speed of the penguin as well as the prefabs for the heart of the regurgitated fish
+    public float moveSpeed = 5f;    // How fast the agent moves forwards
+    public float turnSpeed = 180f;  // How fast the agent turns
+    public GameObject heartPrefab;  // Prefab of the heart that appears when the baby is fed
+    public GameObject regurgitatedFishPrefab;   // The prefab of the regurgitated fish that appears when the baby is fed
+
+    // Private variables to keep track of things
+    private PenguinArea penguinArea;
+    new private Rigidbody rigidbody;
+    private GameObject baby;
+    private bool isFull;    // if true, penguin has a full belly
+
+    // Because InitializeAgent() is called once automatically and not every time it is reset, we will reset the Agent with this function
+    // We'll use it to find a few objects in our scene
+    // Initial setup, called when agent is enabled
+    public override void Initialize()
+    {
+        base.Initialize();
+        penguinArea = GetComponentInParent<pengiunArea>();
+        baby = penguinArea.penguinBaby;
+        rigidbody = GetComponent<rigidbody>();
+    }
+
+    // Where the agent will recieve inputs, either from a player or neural network, this treats them as the same
+    // actionBuffers contains an array of values that correspond to actions the agent can take
+    // We are using discrete actions, so each integer corresponds to a choice, instead of continuous actions which would allow fractional values
+    // We have two discrete actionbuffer arguments. 0 or 1 indicates whether we want to remain in place [0] or move forwards [1]
+                                                    // In the second, [0] indicates no turn, [1] is turn in negative direction, and [2] is turn in positive direction
+    // OnActionRecieved() applies the movement and tacks on a small negative reward, which encourages the agent to complete the task quickly
+        // With 5000 steps, and a negative reward for -1/5000 for each step, the penguin will be incentivised to complete the task with as few steps as possible
+   // /*
+    public override void OnActionReceived(ActionBuffers actionBuffers)
+    {
+        float forwardAmount = actionBuffers.DiscreteActions[0]; 
+
+        float turnAmount = 0f;  
+        if (actionBuffers.DiscreteActions[1] == 1f)
+        {
+            turnAmount = -1f;
+        }
+        else if (actionBuffers.DiscreteActions[1] == 2f)
+        {
+            turnAmount = 1f;
+        }
+
+        // Apply movement
+        rigidbody.MovePosition(transform.position + transform.forward * forwardAmount * moveSpeed * Time.fixedDeltaTime);
+        transform.Rotate(transform.up * turnAmount * turnSpeed * Time.fixedDeltaTime);
+
+        // Apply tiny negative reward to each step
+        if (MaxStep > 0) AddReward(-1f / MaxStep);
+    }
+   // */
+   /*
+    public override void OnActionReceived2(ActionBuffers actionBuffers)
+    {
+        // Convert the first action to forward movement
+        float forwardAmount = actionBuffers.DiscreteActions[0]; // Convert first action to forward movement
+
+        // Convert the second action to turning left or right
+        float turnAmount = 0f;  
+        if (actionBuffers.DiscreteActions[1] == 1f)
+        {
+            turnAmount = -1f;
+        }
+        else if (actionBuffers.DiscreteActions[1] == 2f)
+        {
+            turnAmount = 1f;
+        }
+
+        // Apply movement
+        rigidbody.MovePosition(transform.position + transform.forward * forwardAmount * moveSpeed * Time.fixedDeltaTime);
+        transform.Rotate(transform.up * turnAmount * turnSpeed * Time.fixedDeltaTime);
+
+        // Apply a tiny negative reward every step to encourage action
+        if (MaxStep > 0) AddReward(-1f / MaxStep);
+    }*/
+
+
+    // The Heuristic() function will allow the user to control the pengiun by converting keyboard presses into actions
+    // This will use the DiscreteActions Array
+    // Default forwardAction will be 0, but when player presses "w" the value will be set to 1
+    // Default actionTurn will be 0, but when "a" is pressed it will be 1, and when "d" is pressed it will be set to 2
+    // Override the HeursticFunction only when set to heuristic only in behavoir parameters inspector
+    // A vector action array of floats that will be passed into
+    public override void Heuristic(in ActionBuffers actionsOut)
+    {
+        int forwardAction = 0;
+        int turnAction = 0;
+        if (Input.GetKey(KeyCode.W))
+        {
+            forwardAction = 1;  // Move forwards
+        }
+        if (Input.GetKey(KeyCode.A))
+        {
+            turnAction = 1; // Turn Left
+        }
+        else if (Input.GetKey(KeyCode.D))
+        {
+            turnAction = 2;
+        }
+
+        // Put actions into the array
+        actionsOut.DiscreteActions.Array[0] = forwardAction;
+        actionsOut.DiscreteActions.Array[1] = turnAction;
+    }
+
+    // The base agent calls OnEpisodeBegin() when agent is done feeding the baby or it reaches the max num of steps
+    // Use it to empty the baby's stomach and reset the area
+    public override void OnEpisodeBegin()
+    {
+        isFull = false;
+        penguinArea.ResetArea();
+    }
+
+    // The penguin senses with raycasts using the RayPerceptionSensor component, which is added in the Unity Editor
+    // Also senses using numnerical values, using true/false, XYZ, quaternion rotation, you can convert these into useful formats for the agent
+    // Imagine the agent is floating in space, blindfolded; what does it need to know?
+    // We don't have memory, because that is hard to impliment but can be donw. Read abt it in "Memory-enhanced Agents using Recurrent Neural Networks" documentation
+    // Here we will override the CollectObservations() function
+    public override void CollectObservations(VectorSensor sensor)   // Collect all non-raycast obervations
+    {
+        sensor.AddObservation(isFull);  // Whether the penguin has eaten a fish (1 float = 1 value)
+        sensor.AddObservation(Vector3.Distance(baby.transform.position, transform.position));    // Distance to the baby (1 float = 1 Value)
+        sensor.AddObservation((baby.transform.position - transform.position).normalized);   // Direction to baby (1 vector3 = 3 values)
+        sensor.AddObservation(transform.forward);   // Direction the penguin is facing (1 vector3 = 3 values)
+
+        // 1 + 1 + 3 + 3 = 8 total values
+    }
+
+    //Impliment OnCollisionEnter() and test for collisions with items that have the tag "fish" or "baby"
+    private void OnCollisionEnter(Collision collision)
+    {
+        if (collision.transform.CompareTag("fish"))
+        {
+            EatFish(collision.gameObject);  // Try to eat the fish
+        }
+        else if (collision.transform.CompareTag("baby")) ;
+        {
+            RegurgitateFish();
+        }
+    }
+
+    // Add the function to eat fish when the penguin dosen't have a full stomach, and give it a reward
+    private void EatFish(GameObject fishObject) // Check if agent is full, if not, get a reward
+    {
+        if (isFull) return; // Can't eat another while full
+        isFull = true;
+
+        penguinArea.RemoveSpecificFish(fishObject);
+
+        AddReward(1f);
+    }
+
+    // Add the function to regurgitate fish and feed the baby, spawn the regurgitated fish blob and a heart to show mother love for baby
+    // Set auto-destroy timer
+    // The agent gets a reward, and if there are no fish remaining we call Done(), which calls AgentReste()
+    private void RegurgitateFish()
+    {
+        if (!isFull) return;    // Nothing to regurgitate
+        isFull = false;
+
+        // Spawn regurgitated fish
+        GameObject regurgitatedFish = Instantiate<GameObject>(regurgitatedFishPrefab);
+        regurgitatedFish.transform.parent = transform.parent;
+        regurgitatedFish.transform.position = baby.transform.position;
+        Destroy(regurgitatedFish, 4f);
+
+        // Spawn heart
+        GameObject heart = Instantiate<GameObject>(heartPrefab);
+        heart.transform.parent = transform.parent;
+        heart.transform.position = baby.transform.position + Vector3.up;
+        Destroy(heart, 4f);
+
+        AddReward(1f);
+
+        if (penguinArea.FishRemaining <= 0)
+        {
+            EndEpisode();
+        }
+    }
+}
